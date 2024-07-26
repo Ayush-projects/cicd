@@ -1,0 +1,31 @@
+# Load the Active Directory module
+Import-Module ActiveDirectory
+
+# Define paths for input and output CSV files
+$inputCsvPath = "C:\Path\To\Your\InputFile.csv"
+$outputCsvPath = "C:\Path\To\Your\NonExistentComputers.csv"
+
+# Read computer names from the input CSV
+$computerNames = Import-Csv -Path $inputCsvPath | Select-Object -ExpandProperty ComputerName
+
+# Initialize an array to store non-existent computer names
+$nonExistentComputers = @()
+
+# Use a hash set for fast lookups
+$existingComputersSet = @{}
+
+# Retrieve existing computer names from AD in batches
+$batchSize = 1000
+for ($i = 0; $i -lt $computerNames.Count; $i += $batchSize) {
+    $batch = $computerNames[$i..([math]::Min($i + $batchSize - 1, $computerNames.Count - 1))]
+    $adComputers = Get-ADComputer -Filter { Name -in $batch } -Property Name | Select-Object -ExpandProperty Name
+    $adComputers | ForEach-Object { $existingComputersSet[$_] = $true }
+}
+
+# Determine which computers are not in AD
+$nonExistentComputers = $computerNames | Where-Object { -not $existingComputersSet.ContainsKey($_) }
+
+# Export the list of non-existent computers to CSV
+$nonExistentComputers | Export-Csv -Path $outputCsvPath -NoTypeInformation
+
+Write-Output "Non-existent computers have been exported to $outputCsvPath"
